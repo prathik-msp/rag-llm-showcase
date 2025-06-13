@@ -1,59 +1,44 @@
 import os
-import uuid
 import openai
-import pinecone
+from pinecone import Pinecone
 import dotenv
 
-# Load environment variables
 dotenv.load_dotenv()
-openai.api_key = os.getenv("OPENAI_API_KEY")
-pinecone.init(api_key=os.getenv("PINECONE_API_KEY"), environment=os.getenv("PINECONE_ENV"))
-index = pinecone.Index(os.getenv("PINECONE_INDEX_NAME"))
 
-# Constants
-DATA_DIR = "./data"
-CHUNK_SIZE = 500  # Characters, adjust as needed
+# Load env vars
+PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
+PINECONE_ENV = os.getenv("PINECONE_ENV")
+INDEX_NAME = os.getenv("PINECONE_INDEX_NAME")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+
+# Initialize Pinecone and OpenAI
+pc = Pinecone(api_key=PINECONE_API_KEY)
+index = pc.Index(INDEX_NAME)
+openai.api_key = OPENAI_API_KEY
+
 EMBED_MODEL = "text-embedding-3-small"
 
-def chunk_text(text: str, chunk_size: int = CHUNK_SIZE):
-    return [text[i:i + chunk_size] for i in range(0, len(text), chunk_size)]
-
-def embed_text_batch(text_batch: list[str]) -> list[list[float]]:
+def embed_query(text: str):
     response = openai.embeddings.create(
         model=EMBED_MODEL,
-        input=text_batch
+        input=[text]
     )
-    return [item.embedding for item in response.data]
+    return response.data[0].embedding
 
-def ingest_documents():
-    for file_name in os.listdir(DATA_DIR):
-        if not file_name.endswith(".txt"):
-            continue
-        
-        path = os.path.join(DATA_DIR, file_name)
-        with open(path, "r", encoding="utf-8") as f:
-            text = f.read()
+def retrieve_top_k(query: str, top_k: int = 5):
+    query_embedding = embed_query(query)
 
-        chunks = chunk_text(text)
-        print(f"Processing '{file_name}' with {len(chunks)} chunks...")
+    result = index.query(
+        vector=query_embedding,
+        top_k=top_k,
+        include_metadata=True
+    )
 
-        for i in range(0, len(chunks), 10):  # Batch embed 10 at a time
-            batch = chunks[i:i + 10]
-            embeddings = embed_text_batch(batch)
-
-            upserts = []
-            for chunk_text, embedding in zip(batch, embeddings):
-                vector_id = str(uuid.uuid4())
-                metadata = {
-                    "text": chunk_text,
-                    "source": file_name,
-                    "chunk_id": i
-                }
-                upserts.append((vector_id, embedding, metadata))
-
-            index.upsert(vectors=upserts)
-
-        print(f"✔ Uploaded '{file_name}' to Pinecone.")
-
-if __name__ == "__main__":
-    ingest_documents()
+    return [
+        {
+            "text": match['metadata'].get('text', ''),
+            "score": match['score'],
+            "source": match['metadata'].get('source', 'unknown')
+        }
+        for match in result.get('matches', [])
+    ]

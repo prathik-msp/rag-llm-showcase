@@ -1,0 +1,17 @@
+version: "3.9"
+services:
+  backend:
+    build:
+      context: ./
+    env_file:
+      - ./.env
+    ports:
+      - "8080:8000"
+
+  streamlit:
+    build:
+      context: ./streamlit-app
+    ports:
+      - "8501:8501"
+    depends_on:
+      - backend
