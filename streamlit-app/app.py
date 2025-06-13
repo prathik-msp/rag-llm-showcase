@@ -26,7 +26,7 @@ with tab1:
                     st.write(source["text"])
 
             st.subheader("Tokens Used")
-            st.write(result["tokens_used"])
+            #st.write(result["tokens_used"])
 
         except Exception as e:
             st.error(f"Error occurred: {e}")
@@ -66,8 +66,8 @@ with tab2:
                 with st.expander(f"Source {i+1} — File: {source['source']} — Score: {source['score']:.3f}"):
                     st.write(source["text"])
             
-            st.subheader("Tokens Used")
-            st.write(result["tokens_used"])
+            #st.subheader("Tokens Used")
+            #st.write(result["tokens_used"])
 
           
         else:
